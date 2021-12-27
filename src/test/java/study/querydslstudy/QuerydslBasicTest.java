@@ -1,8 +1,11 @@
 package study.querydslstudy;
 
 
+import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.QueryResults;
 import com.querydsl.core.Tuple;
+import com.querydsl.core.types.ExpressionUtils;
+import com.querydsl.core.types.Projections;
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPADeleteClause;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -12,6 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
+import study.querydslstudy.dto.MemberDTO;
+import study.querydslstudy.dto.QMemberDTO;
+import study.querydslstudy.dto.UserDTO;
 import study.querydslstudy.entity.Member;
 import study.querydslstudy.entity.QMember;
 import study.querydslstudy.entity.QTeam;
@@ -463,9 +469,185 @@ public class QuerydslBasicTest {
         }
     }
 
+    @Test
+    void simpleProjection() throws Exception{
+        QMember member = new QMember("m");
+
+        List<String> result = queryFactory
+                .select(member.username)
+                .from(member)
+                .fetch();
+
+        for (String s : result){
+            System.out.println("s = " + s);
+        }
+    }
+
+    @Test
+    void tupleProjection() throws Exception{
+        QMember member = new QMember("m");
+
+        List<Tuple> result = queryFactory
+                .select(member.username, member.age)
+                .from(member)
+                .fetch();
+
+        for(Tuple tuple : result){
+            String username = tuple.get(member.username);
+            Integer age = tuple.get(member.age);
+            System.out.println("username = " + username);
+            System.out.println("age = " + age);
+        }
+    }
+
+    @Test
+    void findDTOByJPQL() throws Exception{
+        List<MemberDTO> result = em.createQuery("select new study.querydslstudy.dto.MemberDTO(m.username,m.age) from Member m", MemberDTO.class)
+                .getResultList();
+
+        for(MemberDTO memberDTO : result){
+            System.out.println("memberDTO = " + memberDTO);
+        }
+    }
+
+    @Test
+    void findDTOBySetter() throws Exception{
+        QMember member = new QMember("m");
+        List<MemberDTO> result = queryFactory
+                .select(Projections.bean(MemberDTO.class,
+                        member.username,
+                        member.age))
+                .from(member)
+                .fetch();
+
+        for(MemberDTO memberDTO:result){
+            System.out.println("memberDTO = " + memberDTO);
+        }
+    }
 
 
+    @Test
+    void findDTOByField() throws Exception{
+        QMember member = new QMember("m");
+        List<MemberDTO> result = queryFactory
+                .select(Projections.fields(MemberDTO.class, //getter,setter 없어도 가능
+                        member.username,
+                        member.age))
+                .from(member)
+                .fetch();
 
+        for(MemberDTO memberDTO:result){
+            System.out.println("memberDTO = " + memberDTO);
+        }
+    }
+
+    @Test
+    void findDTOByConstructor() throws Exception{
+        QMember member = new QMember("m");
+        List<MemberDTO> result = queryFactory
+                .select(Projections.constructor(MemberDTO.class,
+                        member.username,
+                        member.age))
+                .from(member)
+                .fetch();
+
+        for(MemberDTO memberDTO:result){
+            System.out.println("memberDTO = " + memberDTO);
+        }
+    }
+
+    @Test
+    void findDTOByUserDTO() throws Exception{
+        QMember member = new QMember("m");
+        List<UserDTO> result = queryFactory
+                .select(Projections.bean(UserDTO.class,
+                        member.username.as("name"), //DTO의 변수명과 같아야함 - 다를시 as 처리
+                        member.age))
+                .from(member)
+                .fetch();
+
+        for(UserDTO userDTO:result){
+            System.out.println("userDTO = " + userDTO);
+        }
+    }
+
+    @Test
+    void findUserDTO() throws Exception{
+        QMember member = new QMember("m");
+        QMember memberSub = new QMember("sub");
+
+        List<UserDTO> result = queryFactory
+                .select(Projections.fields(UserDTO.class,
+                        member.username.as("name"),
+                        ExpressionUtils.as(JPAExpressions
+                                .select(memberSub.age.max())
+                                .from(memberSub), "age")
+                ))
+                .from(member)
+                .fetch();
+
+        for (UserDTO userDTO : result){
+            System.out.println("userDTO = " + userDTO);
+        }
+    }
+
+    //생성자 파라미터 외 주입시 런타임오류
+    @Test
+    void findUserDTOByConstructor() throws Exception{
+        QMember member = new QMember("m");
+        List<UserDTO> result = queryFactory
+                .select(Projections.constructor(UserDTO.class,
+                        member.username,
+                        member.age))
+                .from(member)
+                .fetch();
+
+        for(UserDTO userDTO:result){
+            System.out.println("UserDTO = " + userDTO);
+        }
+    }
+
+    //생성자 파라미터 외 주입시 컴파일 오류
+    @Test
+    void findDTOByQueryProjection() throws Exception{
+        QMember member = new QMember("m");
+
+        List<MemberDTO> result = queryFactory
+                .select(new QMemberDTO(member.username, member.age))
+                .from(member)
+                .fetch();
+
+        for (MemberDTO memberDTO : result){
+            System.out.println("memberDTO = " + memberDTO);
+        }
+    }
+
+    @Test
+    void dynamicQuery_BooleanBuilder() throws Exception{
+        String usernameParam = "member1";
+        Integer ageParam = 10;
+
+        List<Member> result = searchMember1(usernameParam, ageParam);
+        Assertions.assertThat(result.size()).isEqualTo(1);
+    }
+
+    private List<Member> searchMember1(String usernameCond, Integer ageCond) {
+        QMember member = new QMember("m");
+
+        BooleanBuilder builder = new BooleanBuilder();
+        if (usernameCond != null){
+            builder.and(member.username.eq(usernameCond));
+        }
+
+        if(ageCond != null){
+            builder.and(member.age.eq(ageCond));
+        }
+
+        return queryFactory
+                .selectFrom(member)
+                .where(builder)
+                .fetch();
+    }
 }
 
 
