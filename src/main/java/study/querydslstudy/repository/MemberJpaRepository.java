@@ -4,6 +4,7 @@ import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Predicate;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
+import lombok.RequiredArgsConstructor;
 import org.apache.el.lang.ExpressionBuilder;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
@@ -83,11 +84,11 @@ public class MemberJpaRepository {
 
         return queryFactory
                 .select(new QMemberTeamDTO(
-                        member.id.as("memberId"),
+                        member.id,
                         member.username,
                         member.age,
-                        team.id.as("teamId"),
-                        team.name.as("teamName")))
+                        team.id,
+                        team.name))
                 .from(member)
                 .leftJoin(member.team, team)
                 .where(builder)
